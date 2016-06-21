@@ -15,9 +15,11 @@ import Control.Concurrent.STM
 data V s t where
     Pure :: a -> V s a
     Ap :: V s (a -> b) -> V s a -> V s b
-    Var :: s a -> V s a
+    Var :: s a -> V s (Maybe a)
 
-data Actor a = Actor a ((a -> IO ()) -> IO ())
+newtype Actor a = Actor { act :: ((a -> IO ()) -> IO ()) }
+
+newtype MTVar a = MTVar (TVar (Maybe a))
 
 instance Functor (V s) where
     fmap = Ap . Pure
@@ -26,24 +28,24 @@ instance Applicative (V s) where
     pure = Pure
     (<*>) = Ap
 
-eval :: V TVar t -> STM t
+eval :: V MTVar t -> STM t
 eval (Pure a) = pure a
 eval (Ap f x) = eval f <*> eval x
-eval (Var  v) = readTVar v
+eval (Var (MTVar v)) = readTVar v
 
 -- Monadic recursion, so that result of 'go' is in scope?
-compile :: V Actor t -> IO (V TVar t, MVar ())
+compile :: V Actor t -> IO (V MTVar t, MVar ())
 compile var = do
     changed <- newEmptyMVar
-    let go :: V Actor t -> IO (V TVar t)
+    let go :: V Actor t -> IO (V MTVar t)
         go (Pure a) = return $ Pure a
         go (Ap x y) = Ap <$> go x <*> go y
-        go (Var (Actor x0 f)) = do
-            tvar <- atomically $ newTVar x0
+        go (Var (Actor f)) = do
+            tvar <- atomically $ newTVar Nothing
             forkIO . f $ \x -> void $ do
-                atomically $ writeTVar tvar x
+                atomically $ writeTVar tvar (Just x)
                 tryPutMVar changed ()
-            return $ Var tvar
+            return $ Var (MTVar tvar)
     (, changed) <$> go var
 
 actOn :: V Actor t -> (t -> IO ()) -> IO ()
@@ -55,5 +57,5 @@ actOn var action = do
 
 type VVar = V Actor
 
-actor :: a -> ((a -> IO ()) -> IO ()) -> VVar a
-actor = ((.).(.)) Var Actor
+actor :: ((a -> IO ()) -> IO ()) -> VVar (Maybe a)
+actor = Var . Actor
