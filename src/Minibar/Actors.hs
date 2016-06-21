@@ -1,12 +1,22 @@
 module Minibar.Actors
-    (
+    ( command
+    , handle
     ) where
 
 import Control.Variable
 import System.IO
+import System.Exit
+import System.Process
+import Control.Concurrent
+import Control.Monad
 
-command :: Int -> a -> String -> (String -> Maybe a) -> VVar (Maybe a)
-command start delay cmd f = undefined
+command :: Int -> String -> VVar (Maybe (Maybe String))
+command delay cmd = actor $ \sink -> forever $ do
+    (code, out, err) <- readCreateProcessWithExitCode (shell cmd) ""
+    case code of
+        ExitSuccess -> sink $ Just out
+        ExitFailure _ -> sink Nothing
+    threadDelay $ 10000 * delay
 
-handle :: a -> Handle -> (String -> Maybe a) -> VVar (Maybe a)
-handle start hndl f = undefined
+handle :: Handle -> VVar (Maybe (Maybe String))
+handle hndl = undefined

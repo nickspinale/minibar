@@ -3,6 +3,7 @@
 
 module Control.Variable
     ( VVar
+    , Late
     , actor
     , actOn
     ) where
@@ -12,14 +13,16 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Concurrent.STM
 
+type Late = Maybe
+
 data V s t where
     Pure :: a -> V s a
     Ap :: V s (a -> b) -> V s a -> V s b
-    Var :: s a -> V s (Maybe a)
+    Var :: s a -> V s (Late a)
 
 newtype Actor a = Actor { act :: ((a -> IO ()) -> IO ()) }
 
-newtype MTVar a = MTVar (TVar (Maybe a))
+newtype MTVar a = MTVar (TVar (Late a))
 
 instance Functor (V s) where
     fmap = Ap . Pure
@@ -48,7 +51,7 @@ compile var = do
             return $ Var (MTVar tvar)
     (, changed) <$> go var
 
-actOn :: V Actor t -> (t -> IO ()) -> IO ()
+actOn :: VVar t -> (t -> IO ()) -> IO ()
 actOn var action = do
     (fresh, changed) <- compile var
     forever $ do
@@ -57,5 +60,5 @@ actOn var action = do
 
 type VVar = V Actor
 
-actor :: ((a -> IO ()) -> IO ()) -> VVar (Maybe a)
+actor :: ((a -> IO ()) -> IO ()) -> VVar (Late a)
 actor = Var . Actor
