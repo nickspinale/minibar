@@ -14,7 +14,6 @@ maintainer:          spinalen@carleton.edu
 build-type:          Simple
 extra-source-files:  ChangeLog.md, README.md
 cabal-version:       >=1.10
-data-files:          data/worker
 
 library
   exposed-modules:     Control.Variable

@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.Variable
     ( VVar
@@ -9,6 +10,7 @@ module Control.Variable
     ) where
 
 import Control.Monad
+import Control.Exception
 import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Concurrent.STM
@@ -55,8 +57,8 @@ actOn :: VVar t -> (t -> IO ()) -> IO ()
 actOn var action = do
     (fresh, changed) <- compile var
     forever $ do
-        takeMVar changed
         atomically (eval fresh) >>= action
+        catch (takeMVar changed) $ \(e :: SomeException) -> threadDelay maxBound
 
 type VVar = V Actor
 
